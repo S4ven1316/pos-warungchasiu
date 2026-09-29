@@ -2,7 +2,6 @@
 
 namespace App\Filament\Resources;
 
-use Dom\Text;
 use Filament\Forms;
 use Filament\Tables;
 use App\Models\Order;
@@ -12,21 +11,25 @@ use Filament\Forms\Set;
 use App\Models\Customer;
 use Filament\Forms\Form;
 use Filament\Tables\Table;
+use App\Models\OrderDetail;
 use Filament\Resources\Resource;
+use Filament\Forms\Components\Group;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\TextInput;
 use Illuminate\Database\Eloquent\Builder;
+use Filament\Forms\Components\Placeholder;
 use App\Filament\Resources\OrderResource\Pages;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use App\Filament\Resources\OrderResource\RelationManagers;
+use App\Filament\Resources\OrderResource\RelationManagers\OrderDetailRelationManager;
 
 class OrderResource extends Resource
 {
     protected static ?string $model = Order::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
+    protected static ?string $navigationIcon = 'heroicon-o-shopping-bag';
 
     public static function form(Form $form): Form
     {
@@ -38,7 +41,10 @@ class OrderResource extends Resource
                     ->disabled()
                     ->hiddenLabel()
                     ->dehydrated()
-                    ->prefix('Data: '),
+                    ->prefix('Data: ')
+                    ->columnSpanFull(),
+                Group::make()
+                ->schema([
                 Forms\Components\Section::make()
                 ->description('Customer Information')
                 ->schema([
@@ -51,9 +57,11 @@ class OrderResource extends Resource
                             $set('phone', $customer->phone ?? null);
                             $set('address', $customer->address ?? null);
                         }),
-                        TextInput::make('phone')
+                        Placeholder::make('phone')
+                        ->content(fn(Get $get)=>Customer::find($get('customer_id'))?->phone ?? '-')
                         ->disabled(),
-                        TextInput::make('address')
+                        Placeholder::make('address')
+                        ->content(fn(Get $get)=>Customer::find($get('customer_id'))?->address ?? '-')
                         ->disabled(),
                         
                 ])->columns(3),
@@ -67,6 +75,7 @@ class OrderResource extends Resource
                         Select::make('product_id')
                         ->relationship('product', 'name')
                         ->reactive()
+                        ->disableOptionsWhenSelectedInSiblingRepeaterItems()
                         ->afterStateUpdated(function($state,Set $set, Get $get){
                             $product = Product::find($state);
                             $price = $product->price ?? 0;
@@ -80,8 +89,11 @@ class OrderResource extends Resource
                             $total = collect($items)->sum(fn($item)=>$item['subtotal'] ?? 0);
                             $set('../../total_price', $total);
                         }),
-                        TextInput::make('price')
-                        ->disabled(),
+                        TextInput::make('price') 
+                        ->numeric()  
+                        ->disabled()
+                        ->formatStateUsing(fn($state, Get $get)
+                    =>$state ?? Product::find($get('product_id'))?->price ?? 0),
                         TextInput::make('qty')
                         ->numeric()
                         ->default(1)
@@ -95,21 +107,33 @@ class OrderResource extends Resource
                             $set('../../total_price', $total);
                         }),
                         TextInput::make('subtotal')
+                        ->numeric()
+                        ->disabled()
+                        ->dehydrated(),
                     ])->columns(4),
                 ]),
-                
-                Forms\Components\TextInput::make('total_price')
+                ])->columnSpan(2),
+
+                Section::make()
+                ->description('Payment Information')
+                ->schema([
+                     Forms\Components\TextInput::make('total_price')
                     ->required()
                     ->numeric()
-            ]);
+                    ->disabled()
+                    ->dehydrated(),
+                ])->columnSpan(1),
+                
+            ])->columns(3);
     }
 
     public static function table(Table $table): Table
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('customer.name')
-                    ->sortable(),
+                Tables\Columns\TextColumn::make('customer.name')   
+                    ->sortable()
+                    ->searchable(),
                 Tables\Columns\TextColumn::make('total_price')
                     ->numeric()
                     ->sortable(),
@@ -143,7 +167,7 @@ class OrderResource extends Resource
     public static function getRelations(): array
     {
         return [
-            //
+            OrderDetailRelationManager::class,
         ];
     }
 
