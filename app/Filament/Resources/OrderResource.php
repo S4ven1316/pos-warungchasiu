@@ -88,6 +88,11 @@ class OrderResource extends Resource
                             $items = $get('../../orderDetail') ?? [];
                             $total = collect($items)->sum(fn($item)=>$item['subtotal'] ?? 0);
                             $set('../../total_price', $total);
+
+                            $discount = $get('../../discount') ?? 0;
+                            $discount_ammount = $total * $discount / 100;
+                            $set ('../../discount_ammount', $discount_ammount);
+                            $set ('../../total_payment', $total - $discount_ammount);
                         }),
                         TextInput::make('price') 
                         ->numeric()  
@@ -105,6 +110,11 @@ class OrderResource extends Resource
                             $items = $get('../../orderDetail') ?? [];
                             $total = collect($items)->sum(fn($item)=>$item['subtotal'] ?? 0);
                             $set('../../total_price', $total);
+                            
+                            $discount = $get('../../discount') ?? 0;
+                            $discount_ammount = $total * $discount / 100;
+                            $set ('../../discount_ammount', $discount_ammount);
+                            $set ('../../total_payment', $total - $discount_ammount);
                         }),
                         TextInput::make('subtotal')
                         ->numeric()
@@ -117,12 +127,47 @@ class OrderResource extends Resource
                 Section::make()
                 ->description('Payment Information')
                 ->schema([
-                     Forms\Components\TextInput::make('total_price')
+                    Select::make('status')
+                    ->options([
+                        'new' => 'New',
+                        'proccesing' => 'Proccesing',
+                        'canceled' => 'Canceled',
+                        'completed' => 'Completed',
+                    ])->default('new')
+                    ->columnSpanFull(),
+                    TextInput::make('total_price')
                     ->required()
                     ->numeric()
                     ->disabled()
+                    ->dehydrated()
+                    ->columnSpanFull(),
+                    TextInput::make('discount')
+                    ->numeric()
+                    ->default(0)
+                    ->columnSpan(1)
+                    ->reactive()
+                    ->afterStateUpdated(function($state, Set $set, Get $get){
+                        $discount=floatval($state)??0;
+                        $total_price = $get('total_price')??0;
+                        $discount_ammount = $total_price * $discount / 100;
+                        $set ('discount_ammount', $discount_ammount);
+                        $set ('total_payment', $total_price - $discount_ammount);
+                        
+                    }),
+                    TextInput::make('discount_ammount')
+                    ->numeric()
+                    ->default(0)
+                    ->columnSpan(3)
+                    ->disabled()
                     ->dehydrated(),
-                ])->columnSpan(1),
+                    TextInput::make('total_payment')
+                    ->numeric()
+                    ->default(0)
+                    ->columnSpanFull()
+                    ->disabled()
+                    ->dehydrated(),
+                ])->columnSpan(1)
+                ->columns(4),
                 
             ])->columns(3);
     }
